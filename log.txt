@@ -1,0 +1,3 @@
+"Initial commit - setting up project" 
+"Created basic structure" 
+"Added core class files" 

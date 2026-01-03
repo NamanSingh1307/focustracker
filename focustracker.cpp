@@ -3,49 +3,41 @@
 #include <ctime>
 #include <string>
 #include <vector>
-#include <iomanip> // For std::put_time, std::get_time
+#include <iomanip>
 #include <map>
-#include <sstream> // For std::stringstream
-#include <chrono>  // For std::chrono::seconds, minutes
-#include <thread>  // For std::this_thread::sleep_for
-#include <limits>  // For std::numeric_limits
-#include <algorithm> // For std::sort and std::unique
+#include <sstream>
+#include <chrono>
+#include <thread>
+#include <limits>
+#include <algorithm>
 
-// --- Global Utility Functions ---
-
-// Simple hash function for passwords (NOT cryptographically secure for real-world apps)
-// In a production environment, use robust hashing libraries like Argon2, bcrypt, or scrypt.
 std::string hashPassword(const std::string& password) {
     long long hash = 0;
     for (char c : password) {
-        hash = (hash * 31 + c) % 1000000007; // A simple polynomial rolling hash
+        hash = (hash * 31 + c) % 1000000007;
     }
     return std::to_string(hash);
 }
 
-// Function to clear input buffer, essential after numeric inputs followed by getline
 void clearInputBuffer() {
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
-// Get current time as tm struct (platform-aware)
 tm getCurrentTm() {
     time_t now = time(nullptr);
     tm current_tm;
-#ifdef _WIN32 // For Windows, use standard localtime. Note: localtime is not thread-safe.
+#ifdef _WIN32
     current_tm = *localtime(&now);
-#else // For Linux/macOS, use thread-safe localtime_r
+#else
     localtime_r(&now, &current_tm);
 #endif
     return current_tm;
 }
 
-// Convert tm to time_t
 time_t tmToTimeT(tm& t) {
     return mktime(&t);
 }
 
-// Convert time_t to string (YYYY-MM-DD)
 std::string timeTToDateString(time_t t) {
     tm local_tm;
 #ifdef _WIN32
@@ -58,21 +50,16 @@ std::string timeTToDateString(time_t t) {
     return oss.str();
 }
 
-// --- Structures ---
-
-// Represents a single focus session
 struct Session {
     std::string category;
     time_t startTime;
     time_t endTime;
-    int duration; // in minutes
+    int duration;
 
-    // Computes the duration of the session in minutes
     void computeDuration() {
         duration = static_cast<int>(difftime(endTime, startTime) / 60);
     }
 
-    // Displays the session details
     void display() const {
         tm start_tm;
 #ifdef _WIN32
@@ -80,7 +67,6 @@ struct Session {
 #else
         localtime_r(&startTime, &start_tm);
 #endif
-
         char start_time_str[100];
         strftime(start_time_str, sizeof(start_time_str), "%Y-%m-%d %H:%M:%S", &start_tm);
 
@@ -90,51 +76,40 @@ struct Session {
     }
 };
 
-// Represents a user with username and hashed password
 struct User {
     std::string username;
     std::string hashedPassword;
 };
 
-// --- FocusTracker Class ---
-
 class FocusTracker {
 private:
-    std::string currentUser; // Stores the username of the currently logged-in user
-    std::map<std::string, User> users; // Map of usernames to User objects
-    std::string usersFile = "users.txt"; // File to store user credentials
-    std::string logFile; // Will be dynamically set based on currentUser
+    std::string currentUser;
+    std::map<std::string, User> users;
+    std::string usersFile = "users.txt";
+    std::string logFile;
 
-    // Private helper methods for user management
     void loadUsers();
     void saveUsers();
     bool registerUser();
     bool loginUser();
-    void setLogFileForCurrentUser(); // Sets the log file path for the current user
+    void setLogFileForCurrentUser();
 
 public:
-    // Constructor: Loads existing users when the application starts
     FocusTracker();
-    
-    // Public methods for session management
-    void startSession(const std::string& category = ""); // Starts a manual focus session
-    void endSession(Session &session); // Ends a session and logs it
-    void logSessionToFile(const Session &session); // Writes a session to the user's log file
-    void loadDailySummary(); // Displays a summary of today's focus sessions
-    void startPomodoroSession(); // Initiates a Pomodoro timer session
-    void generateWeeklyReport(); // Generates a weekly focus report in CSV format
-    void trackStreaks(); // Tracks and displays focus streaks
-    void menu(); // Main application menu
+    void startSession(const std::string& category = "");
+    void endSession(Session &session);
+    void logSessionToFile(const Session &session);
+    void loadDailySummary();
+    void startPomodoroSession();
+    void generateWeeklyReport();
+    void trackStreaks();
+    void menu();
 };
 
-// Constructor implementation
 FocusTracker::FocusTracker() {
-    loadUsers(); // Load user data on startup
+    loadUsers();
 }
 
-// --- User Management Implementations ---
-
-// Loads user credentials from the users file
 void FocusTracker::loadUsers() {
     std::ifstream fin(usersFile);
     if (!fin.is_open()) {
@@ -146,7 +121,6 @@ void FocusTracker::loadUsers() {
     while (std::getline(fin, line)) {
         std::stringstream ss(line);
         std::string username, hashedPassword;
-        // Parse username and hashed password separated by a comma
         if (std::getline(ss, username, ',') && std::getline(ss, hashedPassword)) {
             users[username] = {username, hashedPassword};
         }
@@ -154,7 +128,6 @@ void FocusTracker::loadUsers() {
     fin.close();
 }
 
-// Saves current user credentials to the users file
 void FocusTracker::saveUsers() {
     std::ofstream fout(usersFile);
     if (!fout.is_open()) {
@@ -167,13 +140,12 @@ void FocusTracker::saveUsers() {
     fout.close();
 }
 
-// Allows a new user to register
 bool FocusTracker::registerUser() {
     std::string username, password;
     std::cout << "\n--- Register New User ---\n";
     std::cout << "Enter desired username: ";
     std::cin >> username;
-    clearInputBuffer(); // Clear newline after username input
+    clearInputBuffer();
 
     if (users.count(username)) {
         std::cout << "Username already exists. Please choose a different one.\n";
@@ -182,30 +154,28 @@ bool FocusTracker::registerUser() {
 
     std::cout << "Enter password: ";
     std::cin >> password;
-    clearInputBuffer(); // Clear newline after password input
+    clearInputBuffer();
 
-    users[username] = {username, hashPassword(password)}; // Hash and store password
-    saveUsers(); // Save updated user list
+    users[username] = {username, hashPassword(password)};
+    saveUsers();
     std::cout << "User '" << username << "' registered successfully!\n";
     return true;
 }
 
-// Allows an existing user to log in
 bool FocusTracker::loginUser() {
     std::string username, password;
     std::cout << "\n--- Login ---\n";
     std::cout << "Enter username: ";
     std::cin >> username;
-    clearInputBuffer(); // Clear newline after username input
+    clearInputBuffer();
 
     std::cout << "Enter password: ";
     std::cin >> password;
-    clearInputBuffer(); // Clear newline after password input
+    clearInputBuffer();
 
-    // Check if username exists and password matches the hashed stored password
     if (users.count(username) && users[username].hashedPassword == hashPassword(password)) {
-        currentUser = username; // Set the current user
-        setLogFileForCurrentUser(); // Set the log file path for this user
+        currentUser = username;
+        setLogFileForCurrentUser();
         std::cout << "Welcome, " << currentUser << "!\n";
         return true;
     } else {
@@ -214,25 +184,21 @@ bool FocusTracker::loginUser() {
     }
 }
 
-// Sets the log file path based on the current user's username
 void FocusTracker::setLogFileForCurrentUser() {
     logFile = "focus_log_" + currentUser + ".txt";
 }
 
-// --- Session Management Implementations ---
-
-// Starts a focus session, either manual or with a predefined category (for Pomodoro)
 void FocusTracker::startSession(const std::string& predefinedCategory) {
     Session s;
     if (predefinedCategory.empty()) {
         std::cout << "\nEnter focus category (Study/Work/Reading/etc.): ";
-        std::cin >> std::ws; // Consume leading whitespace before getline
+        std::cin >> std::ws;
         std::getline(std::cin, s.category);
     } else {
         s.category = predefinedCategory;
     }
-    
-    s.startTime = time(nullptr); // Record start time
+
+    s.startTime = time(nullptr);
 
     tm start_tm;
 #ifdef _WIN32
@@ -242,24 +208,22 @@ void FocusTracker::startSession(const std::string& predefinedCategory) {
 #endif
     std::cout << "Session started at " << std::put_time(&start_tm, "%Y-%m-%d %H:%M:%S") << "\n";
     std::cout << "Press ENTER to end session...";
-    std::cin.get(); // Wait for ENTER key press to end session
+    std::cin.get();
 
-    endSession(s); // Call endSession to finalize and log
+    endSession(s);
 }
 
-// Ends a focus session, computes duration, and logs it
 void FocusTracker::endSession(Session &session) {
-    session.endTime = time(nullptr); // Record end time
-    session.computeDuration(); // Calculate duration
-    logSessionToFile(session); // Log the session to file
+    session.endTime = time(nullptr);
+    session.computeDuration();
+    logSessionToFile(session);
 
     std::cout << "\nSession ended. Summary:\n";
-    session.display(); // Display session details
+    session.display();
 }
 
-// Logs a session's data to the user's specific log file
 void FocusTracker::logSessionToFile(const Session &session) {
-    std::ofstream fout(logFile, std::ios::app); // Open in append mode
+    std::ofstream fout(logFile, std::ios::app);
     if (!fout.is_open()) {
         std::cerr << "Error: Could not open log file '" << logFile << "' for writing.\n";
         return;
@@ -271,7 +235,6 @@ void FocusTracker::logSessionToFile(const Session &session) {
     fout.close();
 }
 
-// Loads and displays a summary of focus sessions for the current day
 void FocusTracker::loadDailySummary() {
     std::ifstream fin(logFile);
     if (!fin.is_open()) {
@@ -280,21 +243,20 @@ void FocusTracker::loadDailySummary() {
     }
 
     std::string line;
-    std::map<std::string, int> categoryDuration; // Map to store total duration per category
-    tm now_tm = getCurrentTm(); // Get current date for comparison
+    std::map<std::string, int> categoryDuration;
+    tm now_tm = getCurrentTm();
 
     while (std::getline(fin, line)) {
         std::stringstream ss(line);
         std::string cat_str, start_str, end_str, dur_str;
 
-        // Parse the comma-separated values from the log file line
         if (std::getline(ss, cat_str, ',') &&
             std::getline(ss, start_str, ',') &&
             std::getline(ss, end_str, ',') &&
             std::getline(ss, dur_str)) {
-            
-            time_t start_time = static_cast<time_t>(std::stoll(start_str)); // Convert string to time_t
-            int duration = std::stoi(dur_str); // Convert string to int
+
+            time_t start_time = static_cast<time_t>(std::stoll(start_str));
+            int duration = std::stoi(dur_str);
 
             tm start_tm_session;
 #ifdef _WIN32
@@ -302,11 +264,10 @@ void FocusTracker::loadDailySummary() {
 #else
             localtime_r(&start_time, &start_tm_session);
 #endif
-            // Check if the session occurred on the current day
             if (start_tm_session.tm_mday == now_tm.tm_mday &&
                 start_tm_session.tm_mon == now_tm.tm_mon &&
                 start_tm_session.tm_year == now_tm.tm_year) {
-                categoryDuration[cat_str] += duration; // Aggregate duration for the category
+                categoryDuration[cat_str] += duration;
             }
         }
     }
@@ -316,14 +277,11 @@ void FocusTracker::loadDailySummary() {
     if (categoryDuration.empty()) {
         std::cout << "No sessions recorded today.\n";
     } else {
-        // Corrected for C++14 compatibility (no structured bindings)
         for (auto const& pair : categoryDuration) {
             std::cout << " - " << pair.first << ": " << pair.second << " minutes\n";
         }
     }
 }
-
-// --- Pomodoro Timer Implementation ---
 
 void FocusTracker::startPomodoroSession() {
     int focusDuration, breakDuration, numCycles;
@@ -334,7 +292,7 @@ void FocusTracker::startPomodoroSession() {
     std::cin >> breakDuration;
     std::cout << "Enter number of cycles: ";
     std::cin >> numCycles;
-    clearInputBuffer(); // Clear newline after numeric input
+    clearInputBuffer();
 
     std::cout << "Enter focus category for Pomodoro sessions: ";
     std::string category;
@@ -344,36 +302,32 @@ void FocusTracker::startPomodoroSession() {
     for (int i = 1; i <= numCycles; ++i) {
         std::cout << "\n--- Cycle " << i << "/" << numCycles << " ---\n";
         std::cout << "Focus Time! (" << focusDuration << " minutes) - Category: " << category << "\n";
-        
+
         Session s;
         s.category = category;
-        s.startTime = time(nullptr); // Start time for this focus block
+        s.startTime = time(nullptr);
 
-        // Countdown for focus time
         for (int j = focusDuration; j > 0; --j) {
             std::cout << "Time remaining: " << j << " minutes...\r" << std::flush;
             std::this_thread::sleep_for(std::chrono::minutes(1));
         }
-        std::cout << "Focus time ended!                                   \n"; // Clear line after countdown
+        std::cout << "Focus time ended!                                   \n";
 
-        s.endTime = time(nullptr); // End time for this focus block
+        s.endTime = time(nullptr);
         s.computeDuration();
-        logSessionToFile(s); // Log each focus session from Pomodoro
+        logSessionToFile(s);
 
-        if (i < numCycles) { // Don't take a break after the last cycle
+        if (i < numCycles) {
             std::cout << "Break Time! (" << breakDuration << " minutes)\n";
-            // Countdown for break time
             for (int j = breakDuration; j > 0; --j) {
                 std::cout << "Time remaining: " << j << " minutes...\r" << std::flush;
                 std::this_thread::sleep_for(std::chrono::minutes(1));
             }
-            std::cout << "Break time ended!                                   \n"; // Clear line
+            std::cout << "Break time ended!                                   \n";
         }
     }
     std::cout << "\nPomodoro session completed!\n";
 }
-
-// --- Weekly Report Implementation ---
 
 void FocusTracker::generateWeeklyReport() {
     std::ifstream fin(logFile);
@@ -382,15 +336,12 @@ void FocusTracker::generateWeeklyReport() {
         return;
     }
 
-    std::map<std::string, std::map<std::string, int>> weeklyData; // Date -> Category -> Duration
+    std::map<std::string, std::map<std::string, int>> weeklyData;
     tm now_tm = getCurrentTm();
 
-    // Find the start of the current week (Monday)
     tm start_of_week_tm = now_tm;
-    // Adjust tm_mday to get to Monday. tm_wday: 0=Sunday, 1=Monday, ..., 6=Saturday
-    // If today is Sunday (0), subtract 6 days. If Monday (1), subtract 0. If Tuesday (2), subtract 1.
     start_of_week_tm.tm_mday -= (start_of_week_tm.tm_wday == 0 ? 6 : start_of_week_tm.tm_wday - 1);
-    mktime(&start_of_week_tm); // Normalize the tm struct (adjusts month/year if mday goes out of range)
+    mktime(&start_of_week_tm);
 
     time_t start_of_week_time = tmToTimeT(start_of_week_tm);
 
@@ -403,14 +354,13 @@ void FocusTracker::generateWeeklyReport() {
             std::getline(ss, start_str, ',') &&
             std::getline(ss, end_str, ',') &&
             std::getline(ss, dur_str)) {
-            
+
             time_t session_start_time = static_cast<time_t>(std::stoll(start_str));
             int duration = std::stoi(dur_str);
 
-            // Check if session falls within the current week (from Monday to now)
             if (session_start_time >= start_of_week_time && session_start_time <= time(nullptr)) {
                 std::string date_str = timeTToDateString(session_start_time);
-                weeklyData[date_str][cat_str] += duration; // Aggregate data
+                weeklyData[date_str][cat_str] += duration;
             }
         }
     }
@@ -422,30 +372,24 @@ void FocusTracker::generateWeeklyReport() {
         return;
     }
 
-    fout << "Date,Category,Total Duration (minutes)\n"; // CSV Header
-    
-    // Collect and sort dates for consistent CSV output
+    fout << "Date,Category,Total Duration (minutes)\n";
+
     std::vector<std::string> sortedDates;
-    // Corrected for C++14 compatibility (no structured bindings)
-    for(auto const& pair : weeklyData) {
+    for (auto const& pair : weeklyData) {
         sortedDates.push_back(pair.first);
     }
     std::sort(sortedDates.begin(), sortedDates.end());
 
-    // Write aggregated data to CSV
     for (const std::string& date : sortedDates) {
-        // Corrected for C++14 compatibility (no structured bindings)
         for (auto const& pair : weeklyData[date]) {
             fout << date << "," << pair.first << "," << pair.second << "\n";
         }
     }
     fout.close();
 
-    std::cout << "\nWeekly report generated successfully for " << currentUser 
+    std::cout << "\nWeekly report generated successfully for " << currentUser
               << " at weekly_report_" << currentUser << ".csv\n";
 }
-
-// --- Streak Tracking Implementation ---
 
 void FocusTracker::trackStreaks() {
     std::ifstream fin(logFile);
@@ -454,7 +398,7 @@ void FocusTracker::trackStreaks() {
         return;
     }
 
-    std::vector<time_t> sessionTimestamps; // Store all session start times
+    std::vector<time_t> sessionTimestamps;
     std::string line;
     while (std::getline(fin, line)) {
         std::stringstream ss(line);
@@ -464,7 +408,7 @@ void FocusTracker::trackStreaks() {
             std::getline(ss, start_str, ',') &&
             std::getline(ss, end_str, ',') &&
             std::getline(ss, dur_str)) {
-            
+
             time_t start_time = static_cast<time_t>(std::stoll(start_str));
             sessionTimestamps.push_back(start_time);
         }
@@ -476,27 +420,23 @@ void FocusTracker::trackStreaks() {
         return;
     }
 
-    // Convert timestamps to unique YYYY-MM-DD date strings
     std::vector<std::string> uniqueDates;
     for (time_t t : sessionTimestamps) {
         uniqueDates.push_back(timeTToDateString(t));
     }
     std::sort(uniqueDates.begin(), uniqueDates.end());
-    // Remove duplicate dates to get one entry per day
     uniqueDates.erase(std::unique(uniqueDates.begin(), uniqueDates.end()), uniqueDates.end());
 
     int currentStreak = 0;
     int maxStreak = 0;
-    
+
     if (!uniqueDates.empty()) {
-        currentStreak = 1; // Start with 1 if there's at least one unique date
+        currentStreak = 1;
         maxStreak = 1;
 
-        // Iterate through sorted unique dates to find consecutive days
         for (size_t i = 1; i < uniqueDates.size(); ++i) {
-            // Corrected: Create a named istringstream for std::get_time
             tm prev_tm = {};
-            std::istringstream iss_prev(uniqueDates[i-1]);
+            std::istringstream iss_prev(uniqueDates[i - 1]);
             iss_prev >> std::get_time(&prev_tm, "%Y-%m-%d");
             time_t prev_time_t = tmToTimeT(prev_tm);
 
@@ -505,27 +445,26 @@ void FocusTracker::trackStreaks() {
             iss_curr >> std::get_time(&curr_tm, "%Y-%m-%d");
             time_t curr_time_t = tmToTimeT(curr_tm);
 
-            // Calculate difference in days (seconds / (seconds in a day))
-            double diff_seconds = difftime(curr_time_t, prev_time_t);
-            int diff_days = static_cast<int>(diff_seconds / (60 * 60 * 24));
+            int diff_days = static_cast<int>(difftime(curr_time_t, prev_time_t) / (60 * 60 * 24));
 
-            if (diff_days == 1) { // Consecutive day
+            if (diff_days == 1) {
                 currentStreak++;
-            } else if (diff_days > 1) { // Gap in days, reset streak
+            } else if (diff_days > 1) {
                 currentStreak = 1;
             }
-            maxStreak = std::max(maxStreak, currentStreak); // Update max streak
+            maxStreak = std::max(maxStreak, currentStreak);
         }
     }
 
-    // Check if a session was recorded today
     tm today_tm = getCurrentTm();
     bool hadSessionToday = false;
     for (const std::string& date_str : uniqueDates) {
         tm t = {};
-        std::istringstream iss_date(date_str); // Corrected: Named istringstream
+        std::istringstream iss_date(date_str);
         iss_date >> std::get_time(&t, "%Y-%m-%d");
-        if (t.tm_mday == today_tm.tm_mday && t.tm_mon == today_tm.tm_mon && t.tm_year == today_tm.tm_year) {
+        if (t.tm_mday == today_tm.tm_mday &&
+            t.tm_mon == today_tm.tm_mon &&
+            t.tm_year == today_tm.tm_year) {
             hadSessionToday = true;
             break;
         }
@@ -539,13 +478,10 @@ void FocusTracker::trackStreaks() {
     }
 }
 
-// --- Main Menu ---
-
 void FocusTracker::menu() {
     int choice;
     bool loggedIn = false;
 
-    // Initial login/register loop
     while (!loggedIn) {
         std::cout << "\n==== Welcome to FocusTracker++ ====\n";
         std::cout << "1. Login\n";
@@ -553,17 +489,16 @@ void FocusTracker::menu() {
         std::cout << "3. Exit\n";
         std::cout << "Enter your choice: ";
         std::cin >> choice;
-        clearInputBuffer(); // Clear newline after numeric input
+        clearInputBuffer();
 
         switch (choice) {
             case 1: loggedIn = loginUser(); break;
             case 2: registerUser(); break;
-            case 3: std::cout << "Exiting...\n"; return; // Exit application
-            default: std::cout << "Invalid option! Please try again.\n"; break;
+            case 3: std::cout << "Exiting...\n"; return;
+            default: std::cout << "Invalid option! Please try again.\n";
         }
     }
 
-    // Main application menu loop (after successful login)
     do {
         std::cout << "\n==== FocusTracker++ Menu (" << currentUser << ") ====\n";
         std::cout << "1. Start Manual Focus Session\n";
@@ -575,7 +510,7 @@ void FocusTracker::menu() {
         std::cout << "7. Exit\n";
         std::cout << "Enter your choice: ";
         std::cin >> choice;
-        clearInputBuffer(); // Clear newline after numeric input
+        clearInputBuffer();
 
         switch (choice) {
             case 1: startSession(); break;
@@ -583,37 +518,20 @@ void FocusTracker::menu() {
             case 3: loadDailySummary(); break;
             case 4: generateWeeklyReport(); break;
             case 5: trackStreaks(); break;
-            case 6: 
-                currentUser = ""; // Clear current user
-                loggedIn = false; // Set loggedIn to false to re-enter login loop
+            case 6:
+                currentUser = "";
+                loggedIn = false;
                 std::cout << "Logged out successfully.\n";
-                // Re-enter the initial login/register loop
-                while (!loggedIn) {
-                    std::cout << "\n==== Welcome to FocusTracker++ ====\n";
-                    std::cout << "1. Login\n";
-                    std::cout << "2. Register\n";
-                    std::cout << "3. Exit\n";
-                    std::cout << "Enter your choice: ";
-                    std::cin >> choice;
-                    clearInputBuffer();
-
-                    switch (choice) {
-                        case 1: loggedIn = loginUser(); break;
-                        case 2: registerUser(); break;
-                        case 3: std::cout << "Exiting...\n"; return; // Exit application
-                        default: std::cout << "Invalid option! Please try again.\n"; break;
-                    }
-                }
-                break;
-            case 7: std::cout << "Exiting...\n"; break; // Exit application
-            default: std::cout << "Invalid option! Please try again.\n"; break;
+                menu();
+                return;
+            case 7: std::cout << "Exiting...\n"; break;
+            default: std::cout << "Invalid option! Please try again.\n";
         }
     } while (choice != 7);
 }
 
-// Main function to run the application
 int main() {
-    FocusTracker app; // Create an instance of the FocusTracker
-    app.menu(); // Start the application menu
+    FocusTracker app;
+    app.menu();
     return 0;
 }
